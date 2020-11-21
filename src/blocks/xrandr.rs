@@ -5,7 +5,6 @@ use std::time::Duration;
 use crossbeam_channel::Sender;
 use regex::RegexSet;
 use serde_derive::Deserialize;
-use uuid::Uuid;
 
 use crate::blocks::Update;
 use crate::blocks::{Block, ConfigBlock};
@@ -14,7 +13,7 @@ use crate::de::deserialize_duration;
 use crate::errors::*;
 use crate::input::{I3BarEvent, MouseButton};
 use crate::scheduler::Task;
-use crate::util::FormatTemplate;
+use crate::util::{pseudo_uuid, FormatTemplate};
 use crate::widget::I3BarWidget;
 use crate::widgets::button::ButtonWidget;
 
@@ -199,20 +198,21 @@ impl Xrandr {
 
     fn display(&mut self) -> Result<()> {
         if let Some(m) = self.monitors.get(self.current_idx) {
-            let brightness_str = m.brightness.to_string();
             let values = map!("{display}" => m.name.clone(),
-                              "{brightness}" => brightness_str,
-                              "{resolution}" => m.resolution.clone());
+                              "{brightness}" => m.brightness.to_string(),
+                              "{brightness_icon}" => self.config.icons.get("backlight_full").cloned().unwrap_or_else(|| "".to_string()).trim().to_string(),
+                              "{resolution}" => m.resolution.clone(),
+                              "{res_icon}" => self.config.icons.get("resolution").cloned().unwrap_or_else(|| "".to_string()).trim().to_string());
 
             self.text.set_icon("xrandr");
             let format_str = if self.resolution {
                 if self.icons {
-                    "{display} \u{f185} {brightness} \u{f096} {resolution}"
+                    "{display} {brightness_icon} {brightness} {res_icon} {resolution}"
                 } else {
                     "{display}: {brightness} [{resolution}]"
                 }
             } else if self.icons {
-                "{display} \u{f185} {brightness}"
+                "{display} {brightness_icon} {brightness}"
             } else {
                 "{display}: {brightness}"
             };
@@ -234,7 +234,7 @@ impl ConfigBlock for Xrandr {
         config: Config,
         _tx_update_request: Sender<Task>,
     ) -> Result<Self> {
-        let id = Uuid::new_v4().to_simple().to_string();
+        let id = pseudo_uuid();
         let mut step_width = block_config.step_width;
         if step_width > 50 {
             step_width = 50;

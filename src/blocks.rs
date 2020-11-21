@@ -1,3 +1,4 @@
+pub mod apt;
 pub mod backlight;
 pub mod battery;
 pub mod bluetooth;
@@ -37,6 +38,7 @@ pub mod watson;
 pub mod weather;
 pub mod xrandr;
 
+use self::apt::*;
 use self::backlight::*;
 use self::battery::*;
 use self::bluetooth::*;
@@ -161,6 +163,7 @@ pub fn create_block(
 ) -> Result<Box<dyn Block>> {
     match name {
         // Please keep these in alphabetical order.
+        "apt" => block!(Apt, block_config, config, update_request),
         "backlight" => block!(Backlight, block_config, config, update_request),
         "battery" => block!(Battery, block_config, config, update_request),
         "bluetooth" => block!(Bluetooth, block_config, config, update_request),
@@ -171,6 +174,7 @@ pub fn create_block(
         "docker" => block!(Docker, block_config, config, update_request),
         "focused_window" => block!(FocusedWindow, block_config, config, update_request),
         "github" => block!(Github, block_config, config, update_request),
+        "hueshift" => block!(Hueshift, block_config, config, update_request),
         "ibus" => block!(IBus, block_config, config, update_request),
         "kdeconnect" => block!(KDEConnect, block_config, config, update_request),
         "keyboard_layout" => block!(KeyboardLayout, block_config, config, update_request),
@@ -198,7 +202,6 @@ pub fn create_block(
         "watson" => block!(Watson, block_config, config, update_request),
         "weather" => block!(Weather, block_config, config, update_request),
         "xrandr" => block!(Xrandr, block_config, config, update_request),
-        "hueshift" => block!(Hueshift, block_config, config, update_request),
         other => Err(BlockError(other.to_string(), "Unknown block!".to_string())),
     }
 }

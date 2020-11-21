@@ -29,7 +29,6 @@ use std::time::{Duration, Instant};
 
 use crossbeam_channel::Sender;
 use serde_derive::Deserialize;
-use uuid::Uuid;
 
 use crate::blocks::Update;
 use crate::blocks::{Block, ConfigBlock};
@@ -38,8 +37,8 @@ use crate::errors::*;
 use crate::input::{I3BarEvent, MouseButton};
 use crate::scheduler::Task;
 use crate::subprocess::spawn_child_async;
-use crate::util::{format_percent_bar, FormatTemplate};
-use crate::widget::{I3BarWidget, State};
+use crate::util::{format_percent_bar, pseudo_uuid, FormatTemplate};
+use crate::widget::{I3BarWidget, Spacing, State};
 use crate::widgets::button::ButtonWidget;
 
 trait SoundDevice {
@@ -873,8 +872,10 @@ impl Sound {
                 } else {
                     self.text.set_text(text);
                 }
+                self.text.set_spacing(Spacing::Normal);
             } else {
                 self.text.set_text("");
+                self.text.set_spacing(Spacing::Hidden);
             }
             self.text.set_state(State::Warning);
         } else {
@@ -884,6 +885,7 @@ impl Sound {
             } else {
                 text
             });
+            self.text.set_spacing(Spacing::Normal);
             self.text.set_state(State::Idle);
         }
 
@@ -899,7 +901,7 @@ impl ConfigBlock for Sound {
         config: Config,
         tx_update_request: Sender<Task>,
     ) -> Result<Self> {
-        let id = Uuid::new_v4().to_simple().to_string();
+        let id = pseudo_uuid();
         let mut step_width = block_config.step_width;
         if step_width > 50 {
             step_width = 50;

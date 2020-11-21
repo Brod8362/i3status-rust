@@ -11,7 +11,6 @@ use crossbeam_channel::Sender;
 use lazy_static::lazy_static;
 use regex::bytes::Regex;
 use serde_derive::Deserialize;
-use uuid::Uuid;
 
 use crate::blocks::Update;
 use crate::blocks::{Block, ConfigBlock};
@@ -22,7 +21,8 @@ use crate::input::{I3BarEvent, MouseButton};
 use crate::scheduler::Task;
 use crate::subprocess::spawn_child_async;
 use crate::util::{
-    escape_pango_text, format_percent_bar, format_speed, format_vec_to_bar_graph, FormatTemplate,
+    escape_pango_text, format_percent_bar, format_speed, format_vec_to_bar_graph, pseudo_uuid,
+    FormatTemplate,
 };
 use crate::widget::{I3BarWidget, Spacing};
 use crate::widgets::button::ButtonWidget;
@@ -260,13 +260,17 @@ impl NetworkDevice {
 
         let ip_devs: Vec<IpDev> =
             serde_json::from_str(&output).block_error("net", "Failed to parse JSON response")?;
+
+        if ip_devs.is_empty() {
+            return Ok(Some("".to_string()));
+        }
+
         let ip = ip_devs
             .iter()
             .flat_map(|dev| &dev.addr_info)
             .filter_map(|addr| addr.local.clone())
             .next();
-        ip.block_error("net", &format!("Malformed JSON: {}", output))
-            .map(Some)
+        Ok(ip)
     }
 
     /// Queries the inet IPv6 of this device (using `ip`).
@@ -285,13 +289,17 @@ impl NetworkDevice {
 
         let ip_devs: Vec<IpDev> =
             serde_json::from_str(&output).block_error("net", "Failed to parse JSON response")?;
+
+        if ip_devs.is_empty() {
+            return Ok(Some("".to_string()));
+        }
+
         let ip = ip_devs
             .iter()
             .flat_map(|dev| &dev.addr_info)
             .filter_map(|addr| addr.local.clone())
             .next();
-        ip.block_error("net", &format!("Malformed JSON: {}", output))
-            .map(Some)
+        Ok(ip)
     }
 
     /// Queries the bitrate of this device
@@ -367,6 +375,7 @@ pub struct Net {
     speed_min_unit: Unit,
     speed_digits: usize,
     active: bool,
+    exists: bool,
     hide_inactive: bool,
     hide_missing: bool,
     last_update: Instant,
@@ -584,7 +593,7 @@ impl ConfigBlock for Net {
         let init_tx_bytes = device.tx_bytes().unwrap_or(0);
         let wireless = device.is_wireless();
         let vpn = device.is_vpn();
-        let id = Uuid::new_v4().to_simple().to_string();
+        let id = pseudo_uuid();
 
         let (_, net_config) = config
             .blocks
@@ -667,6 +676,7 @@ impl ConfigBlock for Net {
             rx_bytes: init_rx_bytes,
             tx_bytes: init_tx_bytes,
             active: true,
+            exists: true,
             hide_inactive: block_config.hide_inactive,
             hide_missing: block_config.hide_missing,
             last_update: Instant::now() - Duration::from_secs(30),
@@ -851,10 +861,9 @@ impl Block for Net {
         self.update_device();
 
         // skip updating if device is not up.
-        let exists = self.device.exists()?;
-        let is_up = self.device.is_up()?;
-        if !exists || !is_up {
-            self.active = false;
+        self.exists = self.device.exists()?;
+        self.active = self.exists && self.device.is_up()?;
+        if !self.active {
             self.network.set_text("×".to_string());
             if let Some(ref mut tx) = self.output_tx {
                 *tx = "×".to_string();
@@ -866,7 +875,6 @@ impl Block for Net {
             return Ok(Some(self.update_interval.into()));
         }
 
-        self.active = true;
         self.network.set_text("".to_string());
 
         // Update SSID and IP address every 30s and the bitrate every 10s
@@ -874,7 +882,23 @@ impl Block for Net {
         if now.duration_since(self.last_update).as_secs() % 10 == 0 {
             self.update_bitrate()?;
         }
-        if now.duration_since(self.last_update).as_secs() > 30 {
+
+        let waiting_for_ip = match self.ip_addr.as_deref() {
+            None => false,
+            Some("") => true,
+            Some(_) => false,
+        };
+
+        let waiting_for_ipv6 = match self.ipv6_addr.as_deref() {
+            None => false,
+            Some("") => true,
+            Some(_) => false,
+        };
+
+        if (now.duration_since(self.last_update).as_secs() > 30)
+            || waiting_for_ip
+            || waiting_for_ipv6
+        {
             self.update_ssid()?;
             self.update_signal_strength()?;
             self.update_ip_addr()?;
@@ -890,8 +914,7 @@ impl Block for Net {
                 .icons
                 .get("net_up")
                 .cloned()
-                .unwrap_or_else(|| "".to_string())
-                .trim_start(),
+                .unwrap_or_else(|| "".to_string()),
             self.output_tx.as_ref().unwrap_or(&empty_string)
         );
         let s_dn = format!(
@@ -900,8 +923,7 @@ impl Block for Net {
                 .icons
                 .get("net_down")
                 .cloned()
-                .unwrap_or_else(|| "".to_string())
-                .trim_start(),
+                .unwrap_or_else(|| "".to_string()),
             self.output_rx.as_ref().unwrap_or(&empty_string)
         );
 
@@ -927,10 +949,10 @@ impl Block for Net {
     fn view(&self) -> Vec<&dyn I3BarWidget> {
         if self.active {
             vec![&self.network, &self.output]
-        } else if !self.hide_inactive || !self.hide_missing {
-            vec![&self.network]
-        } else {
+        } else if self.hide_inactive || !self.exists && self.hide_missing {
             vec![]
+        } else {
+            vec![&self.network]
         }
     }
 

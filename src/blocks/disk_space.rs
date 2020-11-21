@@ -4,7 +4,6 @@ use std::time::Duration;
 use crossbeam_channel::Sender;
 use nix::sys::statvfs::statvfs;
 use serde_derive::Deserialize;
-use uuid::Uuid;
 
 use crate::blocks::Update;
 use crate::blocks::{Block, ConfigBlock};
@@ -12,7 +11,7 @@ use crate::config::Config;
 use crate::de::deserialize_duration;
 use crate::errors::*;
 use crate::scheduler::Task;
-use crate::util::{format_percent_bar, FormatTemplate};
+use crate::util::{format_percent_bar, pseudo_uuid, FormatTemplate};
 use crate::widget::{I3BarWidget, State};
 use crate::widgets::text::TextWidget;
 
@@ -212,10 +211,10 @@ impl ConfigBlock for DiskSpace {
             .icons
             .get("disk_drive")
             .cloned()
-            .expect("Could not find disk drive icon");
+            .unwrap_or_else(|| "".to_string());
 
         Ok(DiskSpace {
-            id: Uuid::new_v4().to_simple().to_string(),
+            id: pseudo_uuid(),
             update_interval: block_config.interval,
             disk_space: TextWidget::new(config),
             alias: block_config.alias,

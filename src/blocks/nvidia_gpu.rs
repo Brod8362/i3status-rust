@@ -3,7 +3,6 @@ use std::time::Duration;
 
 use crossbeam_channel::Sender;
 use serde_derive::Deserialize;
-use uuid::Uuid;
 
 use crate::blocks::Update;
 use crate::blocks::{Block, ConfigBlock};
@@ -12,6 +11,7 @@ use crate::de::deserialize_duration;
 use crate::errors::*;
 use crate::input::{I3BarEvent, MouseButton};
 use crate::scheduler::Task;
+use crate::util::pseudo_uuid;
 use crate::widget::{I3BarWidget, Spacing, State};
 use crate::widgets::button::ButtonWidget;
 use crate::widgets::text::TextWidget;
@@ -170,9 +170,9 @@ impl ConfigBlock for NvidiaGpu {
         config: Config,
         _tx_update_request: Sender<Task>,
     ) -> Result<Self> {
-        let id = Uuid::new_v4().to_simple().to_string();
-        let id_memory = Uuid::new_v4().to_simple().to_string();
-        let id_fans = Uuid::new_v4().to_simple().to_string();
+        let id = pseudo_uuid();
+        let id_memory = pseudo_uuid();
+        let id_fans = pseudo_uuid();
 
         Ok(NvidiaGpu {
             id: id.clone(),
@@ -225,7 +225,7 @@ impl ConfigBlock for NvidiaGpu {
             scrolling: config.scrolling,
 
             show_clocks: if block_config.show_clocks {
-                Some(TextWidget::new(config.clone()).with_spacing(Spacing::Inline))
+                Some(TextWidget::new(config).with_spacing(Spacing::Inline))
             } else {
                 None
             },
@@ -296,7 +296,7 @@ impl Block for NvidiaGpu {
 
             match self.name_widget_mode {
                 NameWidgetMode::ShowDefaultName => {
-                    self.name_widget.set_text(gpu_name.to_string());
+                    self.name_widget.set_text(gpu_name);
                     self.name_widget.set_spacing(Spacing::Inline);
                 }
                 NameWidgetMode::ShowLabel => {
@@ -381,36 +381,30 @@ impl Block for NvidiaGpu {
             let event_name = name.as_str();
 
             if event_name == self.id {
-                match e.button {
-                    MouseButton::Left => {
-                        match self.name_widget_mode {
-                            NameWidgetMode::ShowDefaultName => {
-                                self.name_widget_mode = NameWidgetMode::ShowLabel
-                            }
-                            NameWidgetMode::ShowLabel => {
-                                self.name_widget_mode = NameWidgetMode::ShowDefaultName
-                            }
+                if let MouseButton::Left = e.button {
+                    match self.name_widget_mode {
+                        NameWidgetMode::ShowDefaultName => {
+                            self.name_widget_mode = NameWidgetMode::ShowLabel
                         }
-                        self.update()?;
+                        NameWidgetMode::ShowLabel => {
+                            self.name_widget_mode = NameWidgetMode::ShowDefaultName
+                        }
                     }
-                    _ => {}
+                    self.update()?;
                 }
             }
 
             if event_name == self.id_memory {
-                match e.button {
-                    MouseButton::Left => {
-                        match self.memory_widget_mode {
-                            MemoryWidgetMode::ShowUsedMemory => {
-                                self.memory_widget_mode = MemoryWidgetMode::ShowTotalMemory
-                            }
-                            MemoryWidgetMode::ShowTotalMemory => {
-                                self.memory_widget_mode = MemoryWidgetMode::ShowUsedMemory
-                            }
+                if let MouseButton::Left = e.button {
+                    match self.memory_widget_mode {
+                        MemoryWidgetMode::ShowUsedMemory => {
+                            self.memory_widget_mode = MemoryWidgetMode::ShowTotalMemory
                         }
-                        self.update()?;
+                        MemoryWidgetMode::ShowTotalMemory => {
+                            self.memory_widget_mode = MemoryWidgetMode::ShowUsedMemory
+                        }
                     }
-                    _ => {}
+                    self.update()?;
                 }
             }
 

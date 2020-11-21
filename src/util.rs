@@ -10,13 +10,19 @@ use std::process::Command;
 
 use regex::Regex;
 use serde::de::DeserializeOwned;
-use serde_json::value::Value;
 
 use crate::blocks::Block;
 use crate::config::Config;
 use crate::errors::*;
 
 pub const USR_SHARE_PATH: &str = "/usr/share/i3status-rust";
+
+pub fn pseudo_uuid() -> String {
+    let mut bytes = [0u8; 16];
+    getrandom::getrandom(&mut bytes).unwrap();
+    let uuid: String = bytes.iter().map(|&x| format!("{:02x?}", x)).collect();
+    uuid
+}
 
 pub fn escape_pango_text(text: String) -> String {
     text.chars()
@@ -140,15 +146,6 @@ pub fn read_file(blockname: &str, path: &Path) -> Result<String> {
     Ok(content)
 }
 
-#[allow(dead_code)]
-pub fn get_file(name: &str) -> Result<String> {
-    let mut file_contents = String::new();
-    let mut file = File::open(name).internal_error("util", &format!("Unable to open {}", name))?;
-    file.read_to_string(&mut file_contents)
-        .internal_error("util", &format!("Unable to read {}", name))?;
-    Ok(file_contents)
-}
-
 pub fn has_command(block_name: &str, command: &str) -> Result<bool> {
     let exit_status = Command::new("sh")
         .args(&[
@@ -198,31 +195,30 @@ macro_rules! map_to_owned (
      };
 );
 
-struct PrintState {
-    pub last_bg: Option<String>,
-    pub has_predecessor: bool,
-}
-
-impl PrintState {
-    fn set_last_bg(&mut self, bg: String) {
-        self.last_bg = Some(bg);
-    }
-    fn set_predecessor(&mut self, pre: bool) {
-        self.has_predecessor = pre;
-    }
-}
-
 pub fn print_blocks(
     order: &[String],
     block_map: &HashMap<String, &mut dyn Block>,
     config: &Config,
 ) -> Result<()> {
-    let mut state = PrintState {
-        has_predecessor: false,
-        last_bg: None,
-    };
+    let mut last_bg: Option<String> = None;
 
-    print!("[");
+    let mut rendered_blocks = vec![];
+
+    /* To always start with the same alternating tint on the right side of the
+     * bar it is easiest to calculate the number of visible blocks here and
+     * flip the starting tint if an even number of blocks is visible. This way,
+     * the last block should always be untinted.
+     */
+    let visible_count = order
+        .iter()
+        .filter(|block_id| {
+            let block = block_map.get(block_id.as_str()).unwrap();
+            !block.view().is_empty()
+        })
+        .count();
+
+    let mut alternator = visible_count % 2 == 0;
+
     for block_id in order {
         let block = &(*(block_map
             .get(block_id)
@@ -231,58 +227,92 @@ pub fn print_blocks(
         if widgets.is_empty() {
             continue;
         }
-        let first = widgets[0];
-        let color = first.get_rendered()["background"]
+
+        // Get the final JSON from all the widgets for this block
+        let mut rendered_widgets = widgets
+            .iter()
+            .map(|widget| {
+                let mut w_json: serde_json::Value = widget.get_rendered().to_owned();
+                if alternator {
+                    // Apply tint for all widgets of every second block
+                    *w_json.get_mut("background").unwrap() = json!(add_colors(
+                        w_json["background"].as_str(),
+                        config.theme.alternating_tint_bg.as_deref()
+                    )
+                    .unwrap());
+                }
+                w_json
+            })
+            .collect::<Vec<serde_json::Value>>();
+
+        alternator = !alternator;
+
+        if config.theme.native_separators {
+            // Re-add native separator on last widget for native theme
+            *rendered_widgets
+                .last_mut()
+                .unwrap()
+                .get_mut("separator")
+                .unwrap() = json!(null);
+            *rendered_widgets
+                .last_mut()
+                .unwrap()
+                .get_mut("separator_block_width")
+                .unwrap() = json!(null);
+        }
+
+        // Serialize and concatenate widgets
+        let block_str = rendered_widgets
+            .iter()
+            .map(|w| w.to_string())
+            .collect::<Vec<String>>()
+            .join(",");
+
+        if config.theme.native_separators {
+            // Skip separator block for native theme
+            rendered_blocks.push(block_str.to_string());
+            continue;
+        }
+
+        // The first widget's BG is used to get the FG color for the current separator
+        let first_bg = rendered_widgets.first().unwrap()["background"]
             .as_str()
             .internal_error("util", "couldn't get background color")?;
 
-        let sep_fg = if config.theme.separator_fg == "auto" {
-            color
+        let sep_fg = if config.theme.separator_fg == Some("auto".to_string()) {
+            Some(first_bg.to_string())
         } else {
-            &config.theme.separator_fg
+            config.theme.separator_fg.clone()
         };
 
-        let sep_bg = if config.theme.separator_bg == "auto" {
-            state.last_bg.clone()
+        // The separator's BG is the last block's last widget's BG
+        let sep_bg = if config.theme.separator_bg == Some("auto".to_string()) {
+            last_bg
         } else {
-            Some(config.theme.separator_bg.clone())
+            config.theme.separator_bg.clone()
         };
 
         let separator = json!({
             "full_text": config.theme.separator,
             "separator": false,
             "separator_block_width": 0,
-            "background": match sep_bg {
-                Some(bg) => Value::String(bg),
-                None => Value::Null
-            },
+            "background": sep_bg,
             "color": sep_fg,
             "markup": "pango"
         });
-        print!(
-            "{}{},",
-            if state.has_predecessor { "," } else { "" },
-            separator.to_string()
-        );
-        print!("{}", first.to_string());
-        state.set_last_bg(color.to_owned());
-        state.set_predecessor(true);
 
-        for widget in widgets.iter().skip(1) {
-            print!(
-                "{}{}",
-                if state.has_predecessor { "," } else { "" },
-                widget.to_string()
-            );
-            state.set_last_bg(String::from(
-                widget.get_rendered()["background"]
-                    .as_str()
-                    .internal_error("util", "couldn't get background color")?,
-            ));
-            state.set_predecessor(true);
-        }
+        rendered_blocks.push(format!("{},{}", separator.to_string(), block_str));
+
+        // The last widget's BG is used to get the BG color for the next separator
+        last_bg = Some(
+            rendered_widgets.last().unwrap()["background"]
+                .as_str()
+                .internal_error("util", "couldn't get background color")?
+                .to_string(),
+        );
     }
-    println!("],");
+
+    println!("[{}],", rendered_blocks.join(","));
 
     Ok(())
 }
@@ -303,6 +333,28 @@ pub fn color_to_rgba(color: (u8, u8, u8, u8)) -> String {
         "#{:02X}{:02X}{:02X}{:02X}",
         color.0, color.1, color.2, color.3
     )
+}
+
+// TODO: Allow for other non-additive tints
+pub fn add_colors(
+    a: Option<&str>,
+    b: Option<&str>,
+) -> ::std::result::Result<Option<String>, Box<dyn std::error::Error>> {
+    match (a, b) {
+        (None, _) => Ok(None),
+        (Some(a), None) => Ok(Some(a.to_string())),
+        (Some(a), Some(b)) => {
+            let (r_a, g_a, b_a, a_a) = color_from_rgba(a)?;
+            let (r_b, g_b, b_b, a_b) = color_from_rgba(b)?;
+
+            Ok(Some(color_to_rgba((
+                r_a.saturating_add(r_b),
+                g_a.saturating_add(g_b),
+                b_a.saturating_add(b_b),
+                a_a.saturating_add(a_b),
+            ))))
+        }
+    }
 }
 
 pub fn format_percent_bar(percent: f32) -> String {
@@ -364,19 +416,6 @@ where
     } else {
         (0..content.len() - 1).map(|_| bars[0]).collect::<_>()
     }
-}
-
-// TODO: Allow for other non-additive tints
-pub fn add_colors(a: &str, b: &str) -> ::std::result::Result<String, Box<dyn std::error::Error>> {
-    let (r_a, g_a, b_a, a_a) = color_from_rgba(a)?;
-    let (r_b, g_b, b_b, a_b) = color_from_rgba(b)?;
-
-    Ok(color_to_rgba((
-        r_a.saturating_add(r_b),
-        g_a.saturating_add(g_b),
-        b_a.saturating_add(b_b),
-        a_a.saturating_add(a_b),
-    )))
 }
 
 #[derive(Debug, Clone)]

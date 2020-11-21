@@ -67,6 +67,11 @@ Key | Values | Required | Default
 ----|--------|----------|--------
 `device` | The `/sys/class/backlight` device to read brightness information from. | No | Default device
 `step_width` | The brightness increment to use when scrolling, in percent. | No | `5`
+`root_scaling` | Scaling exponent reciprocal (ie. root). | No | `1.0`
+
+Some devices expose raw values that are best handled with nonlinear scaling. The human perception of lightness is close to the cube root of relative luminance, so settings for `root_scaling` between 2.4 and 3.0 are worth trying. For devices with few discrete steps this should be 1.0 (linear).
+
+More information: <https://en.wikipedia.org/wiki/Lightness>
 
 ### Setting Brightness with the Mouse Wheel
 
@@ -515,7 +520,8 @@ Four drivers are available:
 - `localebus` which can read asynchronous updates from the systemd `org.freedesktop.locale1` D-Bus path
 - `kbdd` which uses [kbdd](https://github.com/qnikst/kbdd) to monitor per-window layout changes via DBus
 - `sway` which can read asynchronous updates from the sway IPC
- Which of these methods is appropriate will depend on your system setup.
+
+Which of these methods is appropriate will depend on your system setup.
 
 ### Examples
 
@@ -560,7 +566,14 @@ Key | Values | Required | Default
 `driver` | One of `"setxkbmap"`, `"localebus"`, `"kbddbus"` or `"sway"`, depending on your system. | No | `"setxkbmap"`
 `interval` | Update interval, in seconds. Only used by the `"setxkbmap"` driver. | No | `60`
 `format` | Format string, e.g. " {layout}" | No | `"{layout}"`
-`sway_kb_identifier` | Identifier of the device you want to monitor, as found in the output of `swaymsg -t get_inputs` | No | ""
+`sway_kb_identifier` | Identifier of the device you want to monitor, as found in the output of `swaymsg -t get_inputs` | No | Defaults to first input found
+
+### Format string specification
+
+  Key    | Value
+---------|-------
+`{layout}` | Keyboard layout name
+`{variant}` | Keyboard variant (only `localebus` is supported so far)
 
 ## Load
 
@@ -758,7 +771,7 @@ Supports all music players that implement the [MediaPlayer2 Interface](https://s
 
 and many others.
 
-The block can be configured to drive a specific music player by name or automatically discover the currently active one.
+The block discovers all active players.  Right click on the widget to switch to the next active player.  You can pin the widget to a given player via the "player" setting.
 
 ### Examples
 
@@ -771,12 +784,13 @@ player = "spotify"
 buttons = ["play", "next"]
 ```
 
-Same thing for any compatible player, takes the first active on the bus:
+Same thing for any compatible player, takes the first active on the bus, but ignores "mpd" or anything with "kdeconnect" in the name:
 
 ```toml
 [[block]]
 block = "music"
 buttons = ["play", "next"]
+interface_name_exclude = [".*kdeconnect.*", "mpd"]
 ```
 
 Start Spotify if the block is clicked whilst it's collapsed:
@@ -792,7 +806,8 @@ on_collapsed_click = "spotify"
 
 Key | Values | Required | Default
 ----|--------|----------|--------
-`player` | Name of the music player. Must be the same name the player is registered with the MediaPlayer2 Interface.  If unset, it will automatically discover the active player.  | Yes | None
+`player` | Name of the music player MPRIS interface. Run `busctl --user list | grep "org.mpris.MediaPlayer2." | cut -d' ' -f1` and the name is the part after "org.mpris.MediaPlayer2". If unset, you can cycle through different players by right clicking on the widget.  | No | None
+`interface_name_exclude` | A list of regex patterns for player MPRIS interface names to ignore | No | ""
 `max_width` | Max width of the block in characters, not including the buttons | No | `21`
 `dynamic_width` | Bool to specify whether the block will change width depending on the text content or remain static always (= `max_width`) | No | `false`
 `marquee` | Bool to specify if a marquee style rotation should be used if the title + artist is longer than max-width | No | `true`
@@ -804,6 +819,8 @@ Key | Values | Required | Default
 `on_collapsed_click` | Command to run when the block is clicked while collapsed. | No | None
 `on_click` | Command to run when the block is clicked while not collapsed. | No | None
 `seek_step` | Number of microseconds to seek forward/backward when scrolling on the bar. | No | `1000`
+`hide_when_empty` | Hides the block when there is no player available. | No | `false`
+
 
 ## Net
 
@@ -836,8 +853,8 @@ Key | Values | Required | Default
 `speed_min_unit` | Smallest unit to use when displaying speeds. Possible choices: `"B"`, `"K"`, `"M"`, `"G"`, `"T"`.| No | `"K"`
 `use_bits` | Display speeds in bits instead of bytes. | No | `false`
 `interval` | Update interval, in seconds. Note: the update interval for SSID and IP address is fixed at 30 seconds, and bitrate fixed at 10 seconds. | No | `1`
-`hide_missing` | Whether to hide networks that are missing. | No | `false`
-`hide_inactive` | Whether to hide networks that are down/inactive completely. | No | `false`
+`hide_missing` | Whether to hide interfaces that don't exist on the system. | No | `false`
+`hide_inactive` | Whether to hide interfaces that are not connected (or missing). | No | `false`
 
 ### Format String
 Placeholder | Description
@@ -889,7 +906,7 @@ Key | Values | Required | Default
 `ap_format` | Acces point string formatter. See below for available placeholders. | No | `"{ssid}"`
 `device_format` | Device string formatter. See below for available placeholders. | No | `"{icon}{ap} {ips}"`
 `connection_format` | Connection string formatter. See below for available placeholders. | No | `"{devices}"`
-`on_click` | On-click handler | No | `""`
+`on_click` | On-click handler. Commands are executed in a shell. | No | `""`
 `interface_name_exclude` | A list of regex patterns for device interface names to ignore | No | ""
 `interface_name_include` | A list of regex patterns for device interface names to include (only interfaces that match at least one are shown) | No | ""
 
@@ -1234,10 +1251,11 @@ Key | Values | Required | Default
 ----|--------|----------|--------
 `interval` | Update interval, in seconds. | No | `5`
 `collapsed` | Whether the block will be collapsed by default. | No | `true`
-`good` | Maximum temperature to set state to good. | No | `20`
-`idle` | Maximum temperature to set state to idle. | No | `45`
-`info` | Maximum temperature to set state to info. | No | `60`
-`warning` | Maximum temperature to set state to warning. Beyond this temperature, state is set to critical. | No | `80`
+`scale` | Either `celsius` or `fahrenheit` | No | `celsius`
+`good` | Maximum temperature to set state to good. | No | `20` °C (`68` °F)
+`idle` | Maximum temperature to set state to idle. | No | `45` °C (`113` °F)
+`info` | Maximum temperature to set state to info. | No | `60` °C (`140` °F)
+`warning` | Maximum temperature to set state to warning. Beyond this temperature, state is set to critical. | No | `80` °C (`176` °F)
 `chip` | Narrows the results to a given chip name. `*` may be used as a wildcard. | No | None
 `inputs` | Narrows the results to individual inputs reported by each chip. | No | None
 `format` | Format string. | No | `"{average}° avg, {max}° max"`
@@ -1427,7 +1445,7 @@ interval = 2
 
 Key | Values | Required | Default
 ----|--------|----------|--------
-`icons` | Show icons for brightness and resolution (needs awesome fonts support) | No | `true`
+`icons` | Show icons for brightness and resolution | No | `true`
 `resolution` | Shows the screens resolution | No | `false`
 `step_width` | The steps brightness is in/decreased for the selected screen (When greater than 50 it gets limited to 50) | No | `5`
 `interval` | Update interval, in seconds. | No | `5`

@@ -6,7 +6,6 @@ use std::vec;
 
 use crossbeam_channel::Sender;
 use serde_derive::Deserialize;
-use uuid::Uuid;
 
 use crate::blocks::{Block, ConfigBlock, Update};
 use crate::config::Config;
@@ -16,6 +15,7 @@ use crate::input::I3BarEvent;
 use crate::scheduler::Task;
 use crate::signals::convert_to_valid_signal;
 use crate::subprocess::spawn_child_async;
+use crate::util::pseudo_uuid;
 use crate::widget::{I3BarWidget, State};
 use crate::widgets::button::ButtonWidget;
 
@@ -85,7 +85,7 @@ impl ConfigBlock for Custom {
 
     fn new(block_config: Self::Config, config: Config, tx: Sender<Task>) -> Result<Self> {
         let mut custom = Custom {
-            id: Uuid::new_v4().to_simple().to_string(),
+            id: pseudo_uuid(),
             update_interval: block_config.interval,
             output: ButtonWidget::new(config.clone(), ""),
             command: None,
@@ -112,6 +112,13 @@ impl ConfigBlock for Custom {
             // If the signal is not in the valid range we return an error
             custom.signal = Some(convert_to_valid_signal(signal)?);
         };
+
+        if block_config.cycle.is_some() && block_config.command.is_some() {
+            return Err(BlockError(
+                "custom".to_string(),
+                "`command` and `cycle` are mutually exclusive".to_string(),
+            ));
+        }
 
         if let Some(cycle) = block_config.cycle {
             custom.cycle = Some(cycle.into_iter().cycle().peekable());
