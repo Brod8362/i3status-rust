@@ -4,7 +4,6 @@ use std::time::Duration;
 use crossbeam_channel::Sender;
 use mpd::Client;
 use serde_derive::Deserialize;
-use uuid::Uuid;
 
 use crate::blocks::{Block, ConfigBlock, Update};
 use crate::config::Config;
@@ -13,7 +12,7 @@ use crate::errors::*;
 use crate::input::I3BarEvent;
 use crate::input::MouseButton::*;
 use crate::scheduler::Task;
-use crate::util::FormatTemplate;
+use crate::util::{FormatTemplate,pseudo_uuid};
 use crate::widget::I3BarWidget;
 use crate::widgets::button::ButtonWidget;
 use mpd::status::State::{Pause, Play};
@@ -72,12 +71,12 @@ impl ConfigBlock for Mpd {
         config: Config,
         tx_update_request: Sender<Task>,
     ) -> Result<Self> {
-        let id = Uuid::new_v4().to_simple().to_string();
+        let id:String = pseudo_uuid();
         Ok(Mpd {
             text: ButtonWidget::new(config.clone(), &id)
                 .with_text("Mpd")
                 .with_icon("music"),
-            id,
+            id: id.to_string(),
             update_interval: block_config.interval,
             mpd_conn: Client::connect(&block_config.ip).unwrap(),
             format: FormatTemplate::from_string(&block_config.format)
