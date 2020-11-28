@@ -1,11 +1,11 @@
+use std::collections::BTreeMap;
 use std::process::Command;
 use std::time::Duration;
 
 use crossbeam_channel::Sender;
 use serde_derive::Deserialize;
 
-use crate::blocks::Update;
-use crate::blocks::{Block, ConfigBlock};
+use crate::blocks::{Block, ConfigBlock, Update};
 use crate::config::{Config, LogicalDirection, Scrolling};
 use crate::de::deserialize_duration;
 use crate::errors::*;
@@ -110,6 +110,9 @@ pub struct NvidiaGpuConfig {
     /// Maximum temperature, below which state is set to warning
     #[serde(default = "NvidiaGpuConfig::default_warning")]
     pub warning: u64,
+
+    #[serde(default = "NvidiaGpuConfig::default_color_overrides")]
+    pub color_overrides: Option<BTreeMap<String, String>>,
 }
 
 impl NvidiaGpuConfig {
@@ -159,6 +162,10 @@ impl NvidiaGpuConfig {
 
     fn default_warning() -> u64 {
         80
+    }
+
+    fn default_color_overrides() -> Option<BTreeMap<String, String>> {
+        None
     }
 }
 

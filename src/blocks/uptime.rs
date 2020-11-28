@@ -1,11 +1,11 @@
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::Duration;
 
 use crossbeam_channel::Sender;
 use serde_derive::Deserialize;
 
-use crate::blocks::Update;
-use crate::blocks::{Block, ConfigBlock};
+use crate::blocks::{Block, ConfigBlock, Update};
 use crate::config::Config;
 use crate::de::deserialize_duration;
 use crate::errors::*;
@@ -35,11 +35,16 @@ pub struct UptimeConfig {
         deserialize_with = "deserialize_duration"
     )]
     pub interval: Duration,
+    #[serde(default = "UptimeConfig::default_color_overrides")]
+    pub color_overrides: Option<BTreeMap<String, String>>,
 }
 
 impl UptimeConfig {
     fn default_interval() -> Duration {
         Duration::from_secs(60)
+    }
+    fn default_color_overrides() -> Option<BTreeMap<String, String>> {
+        None
     }
 }
 

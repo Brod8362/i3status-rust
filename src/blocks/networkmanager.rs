@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt;
 use std::net::Ipv4Addr;
 use std::result;
@@ -14,8 +15,7 @@ use dbus::{
 use regex::Regex;
 use serde_derive::Deserialize;
 
-use crate::blocks::Update;
-use crate::blocks::{Block, ConfigBlock};
+use crate::blocks::{Block, ConfigBlock, Update};
 use crate::config::Config;
 use crate::errors::*;
 use crate::input::{I3BarEvent, MouseButton};
@@ -493,6 +493,9 @@ pub struct NetworkManagerConfig {
     /// Interface name regex patterns to ignore.
     #[serde(default = "NetworkManagerConfig::default_interface_name_exclude_patterns")]
     pub interface_name_include: Vec<String>,
+
+    #[serde(default = "NetworkManagerConfig::default_color_overrides")]
+    pub color_overrides: Option<BTreeMap<String, String>>,
 }
 
 impl NetworkManagerConfig {
@@ -526,6 +529,10 @@ impl NetworkManagerConfig {
 
     fn default_interface_name_exclude_patterns() -> Vec<String> {
         vec![]
+    }
+
+    fn default_color_overrides() -> Option<BTreeMap<String, String>> {
+        None
     }
 }
 

@@ -1,12 +1,12 @@
-use crossbeam_channel::Sender;
-use serde_derive::Deserialize;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::process::Command;
 use std::time::Duration;
 
-use crate::blocks::Update;
-use crate::blocks::{Block, ConfigBlock};
+use crossbeam_channel::Sender;
+use serde_derive::Deserialize;
+
+use crate::blocks::{Block, ConfigBlock, Update};
 use crate::config::Config;
 use crate::de::deserialize_duration;
 use crate::errors::*;
@@ -307,6 +307,8 @@ pub struct WeatherConfig {
     pub service: WeatherService,
     #[serde(default = "WeatherConfig::default_autolocate")]
     pub autolocate: bool,
+    #[serde(default = "WeatherConfig::default_color_overrides")]
+    pub color_overrides: Option<BTreeMap<String, String>>,
 }
 
 impl WeatherConfig {
@@ -320,6 +322,10 @@ impl WeatherConfig {
 
     fn default_autolocate() -> bool {
         false
+    }
+
+    fn default_color_overrides() -> Option<BTreeMap<String, String>> {
+        None
     }
 }
 

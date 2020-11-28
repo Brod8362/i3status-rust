@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::process::Command;
 use std::str::FromStr;
 use std::time::Duration;
@@ -6,8 +7,7 @@ use crossbeam_channel::Sender;
 use regex::RegexSet;
 use serde_derive::Deserialize;
 
-use crate::blocks::Update;
-use crate::blocks::{Block, ConfigBlock};
+use crate::blocks::{Block, ConfigBlock, Update};
 use crate::config::{Config, LogicalDirection};
 use crate::de::deserialize_duration;
 use crate::errors::*;
@@ -84,6 +84,9 @@ pub struct XrandrConfig {
     /// The steps brightness is in/decreased for the selected screen (When greater than 50 it gets limited to 50)
     #[serde(default = "XrandrConfig::default_step_width")]
     pub step_width: u32,
+
+    #[serde(default = "XrandrConfig::default_color_overrides")]
+    pub color_overrides: Option<BTreeMap<String, String>>,
 }
 
 impl XrandrConfig {
@@ -101,6 +104,10 @@ impl XrandrConfig {
 
     fn default_step_width() -> u32 {
         5 as u32
+    }
+
+    fn default_color_overrides() -> Option<BTreeMap<String, String>> {
+        None
     }
 }
 

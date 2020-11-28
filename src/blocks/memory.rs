@@ -1,13 +1,14 @@
-use crossbeam_channel::Sender;
-use serde_derive::Deserialize;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
-use crate::blocks::Update;
-use crate::blocks::{Block, ConfigBlock};
+use crossbeam_channel::Sender;
+use serde_derive::Deserialize;
+
+use crate::blocks::{Block, ConfigBlock, Update};
 use crate::config::Config;
 use crate::de::deserialize_duration;
 use crate::errors::*;
@@ -210,6 +211,9 @@ pub struct MemoryConfig {
     /// Percentage of swap usage, where state is set to critical
     #[serde(default = "MemoryConfig::default_critical_swap")]
     pub critical_swap: f64,
+
+    #[serde(default = "MemoryConfig::default_color_overrides")]
+    pub color_overrides: Option<BTreeMap<String, String>>,
 }
 
 impl MemoryConfig {
@@ -251,6 +255,10 @@ impl MemoryConfig {
 
     fn default_critical_swap() -> f64 {
         95.0
+    }
+
+    fn default_color_overrides() -> Option<BTreeMap<String, String>> {
+        None
     }
 }
 

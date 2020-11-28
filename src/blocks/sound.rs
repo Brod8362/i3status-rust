@@ -30,8 +30,7 @@ use std::time::{Duration, Instant};
 use crossbeam_channel::Sender;
 use serde_derive::Deserialize;
 
-use crate::blocks::Update;
-use crate::blocks::{Block, ConfigBlock};
+use crate::blocks::{Block, ConfigBlock, Update};
 use crate::config::{Config, LogicalDirection};
 use crate::errors::*;
 use crate::input::{I3BarEvent, MouseButton};
@@ -770,6 +769,9 @@ pub struct SoundConfig {
 
     #[serde(default = "SoundConfig::default_max_vol")]
     pub max_vol: Option<u32>,
+
+    #[serde(default = "SoundConfig::default_color_overrides")]
+    pub color_overrides: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Deserialize, Copy, Clone, Debug)]
@@ -825,6 +827,10 @@ impl SoundConfig {
     }
 
     fn default_max_vol() -> Option<u32> {
+        None
+    }
+
+    fn default_color_overrides() -> Option<BTreeMap<String, String>> {
         None
     }
 }

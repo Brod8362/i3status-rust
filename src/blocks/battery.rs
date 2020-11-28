@@ -4,6 +4,7 @@
 //! display the status, capacity, and time remaining for (dis)charge for an
 //! internal power supply.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -13,8 +14,7 @@ use dbus::arg::Array;
 use dbus::ffidisp::stdintf::org_freedesktop_dbus::Properties;
 use serde_derive::Deserialize;
 
-use crate::blocks::Update;
-use crate::blocks::{Block, ConfigBlock};
+use crate::blocks::{Block, ConfigBlock, Update};
 use crate::config::Config;
 use crate::de::deserialize_duration;
 use crate::errors::*;
@@ -570,6 +570,9 @@ pub struct BatteryConfig {
     /// If the battery device cannot be found, completely hide this block.
     #[serde(default = "BatteryConfig::default_hide_missing")]
     pub hide_missing: bool,
+
+    #[serde(default = "BatteryConfig::default_color_overrides")]
+    pub color_overrides: Option<BTreeMap<String, String>>,
 }
 
 impl BatteryConfig {
@@ -619,6 +622,10 @@ impl BatteryConfig {
 
     fn default_hide_missing() -> bool {
         false
+    }
+
+    fn default_color_overrides() -> Option<BTreeMap<String, String>> {
+        None
     }
 }
 

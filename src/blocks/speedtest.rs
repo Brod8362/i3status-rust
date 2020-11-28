@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
@@ -7,8 +8,7 @@ use std::time::{Duration, Instant};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use serde_derive::Deserialize;
 
-use crate::blocks::Update;
-use crate::blocks::{Block, ConfigBlock};
+use crate::blocks::{Block, ConfigBlock, Update};
 use crate::config::Config;
 use crate::de::deserialize_duration;
 use crate::errors::*;
@@ -68,6 +68,9 @@ pub struct SpeedTestConfig {
     /// Minimum unit to display for throughput indicators.
     #[serde(default = "SpeedTestConfig::default_speed_min_unit")]
     pub speed_min_unit: Unit,
+
+    #[serde(default = "SpeedTestConfig::default_color_overrides")]
+    pub color_overrides: Option<BTreeMap<String, String>>,
 }
 
 impl SpeedTestConfig {
@@ -85,6 +88,10 @@ impl SpeedTestConfig {
 
     fn default_speed_digits() -> usize {
         3
+    }
+
+    fn default_color_overrides() -> Option<BTreeMap<String, String>> {
+        None
     }
 }
 

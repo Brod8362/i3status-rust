@@ -1,11 +1,11 @@
+use std::collections::BTreeMap;
 use std::process::Command;
 use std::time::Duration;
 
 use crossbeam_channel::Sender;
 use serde_derive::Deserialize;
 
-use crate::blocks::Update;
-use crate::blocks::{Block, ConfigBlock};
+use crate::blocks::{Block, ConfigBlock, Update};
 use crate::config::Config;
 use crate::de::deserialize_duration;
 use crate::errors::*;
@@ -67,6 +67,9 @@ pub struct TaskwarriorConfig {
     /// Format override if all tasks are completed
     #[serde(default = "TaskwarriorConfig::default_format")]
     pub format_everything_done: String,
+
+    #[serde(default = "TaskwarriorConfig::default_color_overrides")]
+    pub color_overrides: Option<BTreeMap<String, String>>,
 }
 
 enum TaskwarriorBlockMode {
@@ -95,6 +98,10 @@ impl TaskwarriorConfig {
 
     fn default_format() -> String {
         "{count}".to_owned()
+    }
+
+    fn default_color_overrides() -> Option<BTreeMap<String, String>> {
+        None
     }
 }
 

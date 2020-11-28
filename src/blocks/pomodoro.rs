@@ -1,11 +1,11 @@
+use std::collections::BTreeMap;
 use std::fmt;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::Sender;
 use serde_derive::Deserialize;
 
-use crate::blocks::Update;
-use crate::blocks::{Block, ConfigBlock};
+use crate::blocks::{Block, ConfigBlock, Update};
 use crate::config::Config;
 use crate::errors::*;
 use crate::input::{I3BarEvent, MouseButton};
@@ -103,6 +103,8 @@ pub struct PomodoroConfig {
     pub use_nag: bool,
     #[serde(default = "PomodoroConfig::default_nag_path")]
     pub nag_path: std::path::PathBuf,
+    #[serde(default = "PomodoroConfig::default_color_overrides")]
+    pub color_overrides: Option<BTreeMap<String, String>>,
 }
 
 impl PomodoroConfig {
@@ -128,6 +130,10 @@ impl PomodoroConfig {
 
     fn default_nag_path() -> std::path::PathBuf {
         std::path::PathBuf::from("i3-nagbar")
+    }
+
+    fn default_color_overrides() -> Option<BTreeMap<String, String>> {
+        None
     }
 }
 

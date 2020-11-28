@@ -1,11 +1,11 @@
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use crossbeam_channel::Sender;
 use maildir::Maildir as ExtMaildir;
 use serde_derive::Deserialize;
 
-use crate::blocks::Update;
-use crate::blocks::{Block, ConfigBlock};
+use crate::blocks::{Block, ConfigBlock, Update};
 use crate::config::Config;
 use crate::de::deserialize_duration;
 use crate::errors::*;
@@ -67,6 +67,8 @@ pub struct MaildirConfig {
     pub display_type: MailType,
     #[serde(default = "MaildirConfig::default_icon")]
     pub icon: bool,
+    #[serde(default = "MaildirConfig::default_color_overrides")]
+    pub color_overrides: Option<BTreeMap<String, String>>,
 }
 
 impl MaildirConfig {
@@ -81,6 +83,9 @@ impl MaildirConfig {
     }
     fn default_icon() -> bool {
         true
+    }
+    fn default_color_overrides() -> Option<BTreeMap<String, String>> {
+        None
     }
 }
 

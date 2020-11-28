@@ -1,5 +1,6 @@
 # List of Available Blocks
 
+- [Apt](#apt)
 - [Backlight](#backlight)
 - [Battery](#battery)
 - [Bluetooth](#bluetooth)
@@ -21,6 +22,7 @@
 - [Music](#music)
 - [Net](#net)
 - [NetworkManager](#networkmanager)
+- [Notify](#notify)
 - [Notmuch](#notmuch)
 - [Nvidia Gpu](#nvidia-gpu)
 - [Pacman](#pacman)
@@ -35,6 +37,44 @@
 - [Watson](#watson)
 - [Weather](#weather)
 - [Xrandr](#xrandr)
+
+## Apt
+
+Creates a block which displays the pending updates available for your Debian/Ubuntu based system.
+
+Behind the scenes this uses `apt`, and in order to run it without root priveleges i3status-rust will create its own package database in `/tmp/i3rs-apt/` which may take up several MB or more. If you have a custom apt config then this block may not work as expected - in that case please open an issue.
+
+### Examples
+
+Update the list of pending updates every thirty minutes (1800 seconds):
+
+```toml
+[[block]]
+block = "apt"
+interval = 1800
+format = "{count} updates available"
+format_singular = "{count} update available"
+format_up_to_date = "system up to date"
+critical_updates_regex = "(linux |linux-lts|linux-zen)"
+```
+
+### Options
+
+Key | Values | Required | Default
+----|--------|----------|--------
+`interval` | Update interval, in seconds. | No | `600` (10min)
+`format` | Format override | No | `"{count}"`
+`format_singular` | Format override if exactly one update is available | No | `"{count}"`
+`format_up_to_date` | Format override if no updates are available | No | `"{count}"`
+`warning_updates_regex` | Display block as warning if updates matching regex are available | No | `None`
+`critical_updates_regex` | Display block as critical if updates matching regex are available | No | `None`
+
+### Available Format Keys
+
+Key | Value
+----|-------
+`{count}` | Number of updates available
+
 
 ## Backlight
 
@@ -806,14 +846,14 @@ on_collapsed_click = "spotify"
 
 Key | Values | Required | Default
 ----|--------|----------|--------
-`player` | Name of the music player MPRIS interface. Run `busctl --user list | grep "org.mpris.MediaPlayer2." | cut -d' ' -f1` and the name is the part after "org.mpris.MediaPlayer2". If unset, you can cycle through different players by right clicking on the widget.  | No | None
+`player` | Name of the music player MPRIS interface. Run `busctl --user list \| grep "org.mpris.MediaPlayer2." \| cut -d' ' -f1` and the name is the part after "org.mpris.MediaPlayer2". If unset, you can cycle through different players by right clicking on the widget.  | No | None
 `interface_name_exclude` | A list of regex patterns for player MPRIS interface names to ignore | No | ""
 `max_width` | Max width of the block in characters, not including the buttons | No | `21`
 `dynamic_width` | Bool to specify whether the block will change width depending on the text content or remain static always (= `max_width`) | No | `false`
 `marquee` | Bool to specify if a marquee style rotation should be used if the title + artist is longer than max-width | No | `true`
 `marquee_interval` | Marquee interval in seconds. This is the delay between each rotation. | No | `10`
 `marquee_speed` | Marquee speed in seconds. This is the scrolling time used per character. | No | `0.5`
-`smart_trim` | When marquee rotation is disabled and the title + artist is longer than max-width, trim from both the artist and the title in proportion to their lengths, to try and show the most information possible. | No | `false`
+`smart_trim` | If title + artist is longer than max-width, trim from both the artist and the title in proportion to their lengths to try and show the most information possible. | No | `false`
 `separator` | String to insert between artist and title | No | `" - "`
 `buttons` | Array of control buttons to be displayed. Options are prev (previous title), play (play/pause) and next (next title) | No | `[]`
 `on_collapsed_click` | Command to run when the block is clicked while collapsed. | No | None
@@ -933,6 +973,28 @@ Placeholder | Description
 Placeholder | Description
 ------------|-------------
 `{devices}` | The list of devices, each formatted with the device format string.
+
+
+## Notify
+
+Displays the current state of your notification daemon.
+
+Note: For `dunst` this block uses DBus to get instantaneous updates. For now this requires building `dunst` from source (`dunst-git` from the AUR if you are on Arch Linux) until the next release of `dunst` comes out containing this feature: https://github.com/dunst-project/dunst/pull/766.
+
+TODO: support `mako`
+
+### Options
+
+Key | Values | Required | Default
+----|--------|----------|--------
+`driver` | Notification daemon to monitor | No | `"dunst"`
+`format` | Format override | No | `"{state}"`
+
+### Available Format Keys
+
+Key | Value
+----|-------
+`{state}` | Current state of the notification daemon in icon form
 
 
 ## Notmuch

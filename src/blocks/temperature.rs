@@ -1,12 +1,11 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::process::Command;
 use std::time::Duration;
 
 use crossbeam_channel::Sender;
 use serde_derive::Deserialize;
 
-use crate::blocks::Update;
-use crate::blocks::{Block, ConfigBlock};
+use crate::blocks::{Block, ConfigBlock, Update};
 use crate::config::Config;
 use crate::de::deserialize_duration;
 use crate::errors::*;
@@ -90,6 +89,9 @@ pub struct TemperatureConfig {
     /// Inputs whitelist
     #[serde(default = "TemperatureConfig::default_inputs")]
     pub inputs: Option<Vec<String>>,
+
+    #[serde(default = "TemperatureConfig::default_color_overrides")]
+    pub color_overrides: Option<BTreeMap<String, String>>,
 }
 
 impl TemperatureConfig {
@@ -110,6 +112,10 @@ impl TemperatureConfig {
     }
 
     fn default_inputs() -> Option<Vec<String>> {
+        None
+    }
+
+    fn default_color_overrides() -> Option<BTreeMap<String, String>> {
         None
     }
 }

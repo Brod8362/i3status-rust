@@ -1,11 +1,11 @@
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::blocks::Update;
-use crate::blocks::{Block, ConfigBlock};
+use crate::blocks::{Block, ConfigBlock, Update};
 use crate::config::Config;
 use crate::de::deserialize_duration;
 use crate::de::deserialize_local_timestamp;
@@ -45,6 +45,9 @@ pub struct WatsonConfig {
     /// Show time spent
     #[serde(default = "WatsonConfig::default_show_time")]
     pub show_time: bool,
+
+    #[serde(default = "WatsonConfig::default_color_overrides")]
+    pub color_overrides: Option<BTreeMap<String, String>>,
 }
 
 impl WatsonConfig {
@@ -58,6 +61,9 @@ impl WatsonConfig {
     }
     fn default_show_time() -> bool {
         false
+    }
+    fn default_color_overrides() -> Option<BTreeMap<String, String>> {
+        None
     }
 }
 

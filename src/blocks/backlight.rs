@@ -7,6 +7,7 @@
 //! brightness levels using `xrandr`, see the
 //! [`Xrandr`](../xrandr/struct.Xrandr.html) block.
 
+use std::collections::BTreeMap;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
@@ -17,8 +18,7 @@ use crossbeam_channel::Sender;
 use inotify::{EventMask, Inotify, WatchMask};
 use serde_derive::Deserialize;
 
-use crate::blocks::Update;
-use crate::blocks::{Block, ConfigBlock};
+use crate::blocks::{Block, ConfigBlock, Update};
 use crate::config::{Config, LogicalDirection, Scrolling};
 use crate::errors::*;
 use crate::input::I3BarEvent;
@@ -216,6 +216,9 @@ pub struct BacklightConfig {
     /// For devices with few discrete steps this should be 1.0 (linear).
     #[serde(default = "BacklightConfig::default_root_scaling")]
     pub root_scaling: f64,
+
+    #[serde(default = "BacklightConfig::default_color_overrides")]
+    pub color_overrides: Option<BTreeMap<String, String>>,
 }
 
 impl BacklightConfig {
@@ -229,6 +232,10 @@ impl BacklightConfig {
 
     fn default_root_scaling() -> f64 {
         1f64
+    }
+
+    fn default_color_overrides() -> Option<BTreeMap<String, String>> {
+        None
     }
 }
 

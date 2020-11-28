@@ -1,10 +1,10 @@
 use std::boxed::Box;
+use std::collections::BTreeMap;
 use std::result;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::util::pseudo_uuid;
 use crossbeam_channel::Sender;
 use dbus::{
     arg::{Array, RefArg},
@@ -23,6 +23,7 @@ use crate::errors::*;
 use crate::input::{I3BarEvent, MouseButton};
 use crate::scheduler::Task;
 use crate::subprocess::spawn_child_async;
+use crate::util::{pseudo_uuid, FormatTemplate};
 use crate::widget::{I3BarWidget, Spacing, State};
 use crate::widgets::button::ButtonWidget;
 use crate::widgets::rotatingtext::RotatingTextWidget;
@@ -34,6 +35,8 @@ struct Player {
     playback_status: PlaybackStatus,
     artist: Option<String>,
     title: Option<String>,
+    //TODO
+    //volume: u32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -70,6 +73,7 @@ pub struct Music {
     players: Arc<Mutex<Vec<Player>>>,
     hide_when_empty: bool,
     send: Sender<Task>,
+    format: FormatTemplate,
 }
 
 impl Music {
@@ -209,6 +213,13 @@ pub struct MusicConfig {
 
     #[serde(default = "MusicConfig::default_hide_when_empty")]
     pub hide_when_empty: bool,
+
+    /// Format string for displaying music player info.
+    #[serde(default = "MusicConfig::default_format")]
+    pub format: String,
+
+    #[serde(default = "MusicConfig::default_color_overrides")]
+    pub color_overrides: Option<BTreeMap<String, String>>,
 }
 
 impl MusicConfig {
@@ -262,6 +273,14 @@ impl MusicConfig {
 
     fn default_hide_when_empty() -> bool {
         false
+    }
+
+    fn default_format() -> String {
+        "{combo}".to_string()
+    }
+
+    fn default_color_overrides() -> Option<BTreeMap<String, String>> {
+        None
     }
 }
 
@@ -363,7 +382,7 @@ impl ConfigBlock for Music {
                     if msg.sender().is_some() {
                         if let Some(signal) = PropertiesPropertiesChanged::from_message(&msg) {
                             let mut players = players_copy2.lock().expect("failed to acquire lock for `players`");
-                            let player = players.iter_mut().find(|p| p.bus_name == msg.sender().unwrap().to_string());
+                            let player = players.iter_mut().find(|p| &p.bus_name == &msg.sender().unwrap().to_string());
                             if player.is_none() {
                                 // Ignoring update since could not find player in the array.
                                 // This shouldn't actually occur as long as the other thread updates the array in time.
@@ -526,6 +545,7 @@ impl ConfigBlock for Music {
             players: players_copy,
             hide_when_empty: block_config.hide_when_empty,
             send: send3,
+            format: FormatTemplate::from_string(&block_config.format)?,
         })
     }
 }
@@ -554,23 +574,37 @@ impl Block for Music {
             }
         };
 
+        let interface_name = metadata.clone().interface_name;
+        let split: Vec<&str> = interface_name.split('.').collect();
+        let player_name = split[3].to_string();
         let artist = metadata.clone().artist.unwrap_or_else(|| String::from(""));
         let title = metadata.clone().title.unwrap_or_else(|| String::from(""));
+        let combo =
+            if (title.chars().count() + self.separator.chars().count() + artist.chars().count())
+                < self.max_width
+                || !self.smart_trim
+            {
+                format!("{}{}{}", title, self.separator, artist)
+            } else {
+                self.smart_trim(artist.clone(), title.clone())
+            };
+
+        let values = map!(
+            "{artist}" => artist.clone(),
+            "{title}" => title.clone(),
+            "{combo}" => combo,
+            //TODO
+            //"{vol}" => volume,
+            "{player}" => player_name,
+            "{avail}" => players.len().to_string()
+        );
 
         if !(rotation_in_progress) {
             if title.is_empty() && artist.is_empty() {
                 self.current_song_widget.set_text(String::new());
-            } else if (title.chars().count()
-                + self.separator.chars().count()
-                + artist.chars().count())
-                < self.max_width
-                || !self.smart_trim
-            {
-                self.current_song_widget
-                    .set_text(format!("{}{}{}", title, self.separator, artist));
             } else {
                 self.current_song_widget
-                    .set_text(self.smart_trim(artist, title));
+                    .set_text(self.format.render_static_str(&values)?);
             }
         }
 

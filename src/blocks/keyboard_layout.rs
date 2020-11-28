@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -14,8 +15,7 @@ use swayipc::reply::Event;
 use swayipc::reply::InputChange;
 use swayipc::{Connection, EventType};
 
-use crate::blocks::Update;
-use crate::blocks::{Block, ConfigBlock};
+use crate::blocks::{Block, ConfigBlock, Update};
 use crate::config::Config;
 use crate::de::deserialize_duration;
 use crate::errors::*;
@@ -437,6 +437,9 @@ pub struct KeyboardLayoutConfig {
     interval: Duration,
 
     sway_kb_identifier: String,
+
+    #[serde(default = "KeyboardLayoutConfig::default_color_overrides")]
+    pub color_overrides: Option<BTreeMap<String, String>>,
 }
 
 impl KeyboardLayoutConfig {
@@ -446,6 +449,10 @@ impl KeyboardLayoutConfig {
 
     fn default_interval() -> Duration {
         Duration::from_secs(60)
+    }
+
+    fn default_color_overrides() -> Option<BTreeMap<String, String>> {
+        None
     }
 }
 
