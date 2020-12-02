@@ -12,14 +12,14 @@ use crate::errors::*;
 use crate::input::I3BarEvent;
 use crate::input::MouseButton::*;
 use crate::scheduler::Task;
-use crate::util::{FormatTemplate, pseudo_uuid};
+use crate::util::{pseudo_uuid, FormatTemplate};
 use crate::widget::I3BarWidget;
 use crate::widgets::button::ButtonWidget;
 use mpd::status::State::{Pause, Play};
+use std::cell::Cell;
 use std::cmp;
 use std::collections::hash_map::RandomState;
-use std::collections::{HashMap, BTreeMap};
-use std::cell::Cell;
+use std::collections::{BTreeMap, HashMap};
 
 pub struct Mpd {
     text: ButtonWidget,
@@ -41,8 +41,8 @@ pub struct Mpd {
 pub struct MpdConfig {
     /// Update interval in seconds
     #[serde(
-    default = "MpdConfig::default_interval",
-    deserialize_with = "deserialize_duration"
+        default = "MpdConfig::default_interval",
+        deserialize_with = "deserialize_duration"
     )]
     pub interval: Duration,
 
@@ -110,11 +110,10 @@ impl Block for Mpd {
                     Ok(Some(self.update_interval.into()))
                 }
                 Err(error) => {
-                    // printerr!("Error on reconnect: {}", error);
                     self.text.set_text("reconnecting...");
                     Ok(Some(self.update_interval.into()))
                 }
-            }
+            };
         }
         let status = status_pre.unwrap();
         let repeat = if status.repeat { "R" } else { "" }; //R
@@ -180,30 +179,25 @@ impl Block for Mpd {
             if name.as_str() == self.id {
                 match event.button {
                     Left => {
-                        conn
-                            .prev()
+                        conn.prev()
                             .block_error("Mpd", "Failed to go to previous track")?;
                     }
                     Middle => {
-                        conn
-                            .toggle_pause()
+                        conn.toggle_pause()
                             .block_error("Mpd", "Failed to toggle pause")?;
                     }
                     Right => {
-                        conn
-                            .next()
+                        conn.next()
                             .block_error("Mpd", "Failed to go to next track")?;
                     }
                     WheelUp => {
                         let vol = conn.status().unwrap().volume;
-                        conn
-                            .volume(cmp::min(100, vol + 5))
+                        conn.volume(cmp::min(100, vol + 5))
                             .block_error("Mpd", "Failed to adjust mpd volume")?;
                     }
                     WheelDown => {
                         let vol = conn.status().unwrap().volume;
-                        conn
-                            .volume(cmp::max(0, vol - 5))
+                        conn.volume(cmp::max(0, vol - 5))
                             .block_error("Mpd", "Failed to adjust mpd volume")?;
                     }
                     _ => {}
