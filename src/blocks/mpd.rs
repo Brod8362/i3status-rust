@@ -12,19 +12,21 @@ use crate::errors::*;
 use crate::input::I3BarEvent;
 use crate::input::MouseButton::*;
 use crate::scheduler::Task;
-use crate::util::{FormatTemplate,pseudo_uuid};
+use crate::util::{FormatTemplate, pseudo_uuid};
 use crate::widget::I3BarWidget;
 use crate::widgets::button::ButtonWidget;
 use mpd::status::State::{Pause, Play};
 use std::cmp;
 use std::collections::hash_map::RandomState;
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
+use std::cell::Cell;
 
 pub struct Mpd {
     text: ButtonWidget,
     id: String,
     update_interval: Duration,
-    mpd_conn: Client<TcpStream>,
+    mpd_conn: Cell<Client<TcpStream>>,
+    ip: String,
     format: FormatTemplate,
 
     //useful, but optional
@@ -39,8 +41,8 @@ pub struct Mpd {
 pub struct MpdConfig {
     /// Update interval in seconds
     #[serde(
-        default = "MpdConfig::default_interval",
-        deserialize_with = "deserialize_duration"
+    default = "MpdConfig::default_interval",
+    deserialize_with = "deserialize_duration"
     )]
     pub interval: Duration,
 
@@ -49,6 +51,9 @@ pub struct MpdConfig {
 
     #[serde(default = "MpdConfig::default_ip")]
     pub ip: String,
+
+    #[serde(default = "MpdConfig::default_color_overrides")]
+    pub color_overrides: Option<BTreeMap<String, String>>,
 }
 
 impl MpdConfig {
@@ -62,6 +67,10 @@ impl MpdConfig {
     fn default_ip() -> String {
         String::from("127.0.0.1:6600")
     }
+
+    fn default_color_overrides() -> Option<BTreeMap<String, String>> {
+        None
+    }
 }
 
 impl ConfigBlock for Mpd {
@@ -71,14 +80,15 @@ impl ConfigBlock for Mpd {
         config: Config,
         tx_update_request: Sender<Task>,
     ) -> Result<Self> {
-        let id:String = pseudo_uuid();
+        let id: String = pseudo_uuid();
         Ok(Mpd {
             text: ButtonWidget::new(config.clone(), &id)
                 .with_text("Mpd")
                 .with_icon("music"),
             id: id.to_string(),
             update_interval: block_config.interval,
-            mpd_conn: Client::connect(&block_config.ip).unwrap(),
+            mpd_conn: Cell::new(Client::connect(&block_config.ip).unwrap()),
+            ip: block_config.ip,
             format: FormatTemplate::from_string(&block_config.format)
                 .block_error("Mpd", "Invalid format for mpd format")?,
             tx_update_request,
@@ -89,20 +99,37 @@ impl ConfigBlock for Mpd {
 
 impl Block for Mpd {
     fn update(&mut self) -> Result<Option<Update>> {
-        let status = self.mpd_conn.status().unwrap();
+        let conn = self.mpd_conn.get_mut();
+
+        let status_pre = conn.status();
+        if status_pre.is_err() {
+            conn.close();
+            return match Client::connect(self.ip.as_str()) {
+                Ok(conn) => {
+                    self.mpd_conn.set(conn);
+                    Ok(Some(self.update_interval.into()))
+                }
+                Err(error) => {
+                    // printerr!("Error on reconnect: {}", error);
+                    self.text.set_text("reconnecting...");
+                    Ok(Some(self.update_interval.into()))
+                }
+            }
+        }
+        let status = status_pre.unwrap();
         let repeat = if status.repeat { "R" } else { "" }; //R
         let random = if status.random { "Z" } else { "" }; //Z
+        let single = if status.single { "S" } else { "" }; //S
         let consume = if status.consume { "C" } else { "" }; //C
-        let single = if status.single { "S" } else { "" };
 
-        let title: String = match self.mpd_conn.currentsong().unwrap() {
+        let title: String = match conn.currentsong().unwrap() {
             Some(song) => match song.title {
                 Some(title) => title,
                 None => song.file,
             },
             _ => String::new(),
         };
-        let artist: String = match self.mpd_conn.currentsong().unwrap() {
+        let artist: String = match conn.currentsong().unwrap() {
             Some(song) => match song.tags.get("Artist") {
                 Some(artist) => format!("{}", artist),
                 None => String::from("unknown artist"),
@@ -113,7 +140,7 @@ impl Block for Mpd {
             Some(te) => format!("{}:{:02}", te.num_seconds() / 60, te.num_seconds() % 60),
             _ => String::new(),
         };
-        let length: String = match self.mpd_conn.currentsong().unwrap() {
+        let length: String = match conn.currentsong().unwrap() {
             Some(song) => match song.duration {
                 Some(sl) => format!("{}:{:02}", sl.num_seconds() / 60, sl.num_seconds() % 60),
                 _ => String::new(),
@@ -149,32 +176,33 @@ impl Block for Mpd {
 
     fn click(&mut self, event: &I3BarEvent) -> Result<()> {
         if let Some(ref name) = event.name {
+            let conn = self.mpd_conn.get_mut();
             if name.as_str() == self.id {
                 match event.button {
                     Left => {
-                        self.mpd_conn
+                        conn
                             .prev()
                             .block_error("Mpd", "Failed to go to previous track")?;
                     }
                     Middle => {
-                        self.mpd_conn
+                        conn
                             .toggle_pause()
                             .block_error("Mpd", "Failed to toggle pause")?;
                     }
                     Right => {
-                        self.mpd_conn
+                        conn
                             .next()
                             .block_error("Mpd", "Failed to go to next track")?;
                     }
                     WheelUp => {
-                        let vol = self.mpd_conn.status().unwrap().volume;
-                        self.mpd_conn
+                        let vol = conn.status().unwrap().volume;
+                        conn
                             .volume(cmp::min(100, vol + 5))
                             .block_error("Mpd", "Failed to adjust mpd volume")?;
                     }
                     WheelDown => {
-                        let vol = self.mpd_conn.status().unwrap().volume;
-                        self.mpd_conn
+                        let vol = conn.status().unwrap().volume;
+                        conn
                             .volume(cmp::max(0, vol - 5))
                             .block_error("Mpd", "Failed to adjust mpd volume")?;
                     }
